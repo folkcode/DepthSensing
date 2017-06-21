@@ -9,8 +9,13 @@ using namespace cv;
 using namespace std;
 void Mask(Mat input, Mat mask);
 void DetectSquares(Mat input);
+double median(cv::Mat channel);
 double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0);
-void DetectContours(Mat input);
+vector<Point> contoursConvexHull(vector<vector<Point> > contours);
+
+Mat detectCanny(Mat input);
+
+Rect DetectContours(Mat input, int drawFlag, int convexFlag, int roiFlag);
 int main(int argc, const char** argv)
 {
 	Mat img = imread("nurie.JPG", CV_LOAD_IMAGE_UNCHANGED); //read the image data in the file "MyPic.JPG" and store it in 'img'
@@ -25,14 +30,25 @@ int main(int argc, const char** argv)
 	namedWindow("MyWindow", CV_WINDOW_NORMAL); //create a window with the name "MyWindow"
 	namedWindow("thr", CV_WINDOW_NORMAL);
 	resizeWindow("thr", 612, 816);
-	
+	namedWindow("canny", CV_WINDOW_NORMAL);
+	resizeWindow("canny", 612, 816);
 	namedWindow("copy", CV_WINDOW_NORMAL);
 	resizeWindow("copy", 612, 816);
-	//DetectContours(img);
-	Mask(img, mask);
+	Rect imgRoi = DetectContours(img, 1, 0, 1);
+	Mat zoomedImg = img(imgRoi);
+	//Mask(img, mask);
+	Mat cannyImg = detectCanny(zoomedImg);
+	Mat cannyThreechannel;
+	cvtColor(cannyImg, cannyThreechannel, CV_GRAY2BGR);
+	Rect anotherRoi = DetectContours(cannyThreechannel, 1, 1, 0);
+	Mat moreZoomImg = cannyThreechannel(anotherRoi);
+
+
 	resizeWindow("MyWindow", 612, 816);
+
 	imshow("MyWindow", img); //display the image which is stored in the 'img' in the "MyWindow" window
 	imshow("thr", mask);
+	imshow("copy", moreZoomImg);
 	waitKey(0); //wait infinite time for a keypress
 
 	destroyWindow("MyWindow"); //destroy the window with the name, "MyWindow"
@@ -104,7 +120,7 @@ double angle(cv::Point pt1, cv::Point pt2, cv::Point pt0)
 	return (dx1*dx2 + dy1*dy2) / sqrt((dx1*dx1 + dy1*dy1)*(dx2*dx2 + dy2*dy2) + 1e-10);
 }
 
-void DetectContours(Mat input) {
+Rect DetectContours(Mat input, int drawFlag, int convexFlag, int roiFlag) {
 	int largest_area = 0;
 	int largest_contour_index = 0;
 	Rect bounding_rect;
@@ -118,15 +134,15 @@ void DetectContours(Mat input) {
 	vector<vector<Point> > contours; // Vector for storing contours
 	std::vector<cv::Vec4i> hierarchy;
 	findContours(thr, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE); // Find the contours in the image
-
+	int levels = 2;
 	for (size_t i = 0; i< contours.size(); i++) // iterate through each contour.
 	{
 		double area = contourArea(contours[i]);  //  Find the area of contour
 												 // look for hierarchy[i][3]!=-1, ie hole boundaries
-		if (hierarchy[i][3] != -1) {
+		if (hierarchy[i][3] != -1 && drawFlag == 1) {
 			// random colour
 			Scalar colour((rand() & 255), (rand() & 255), (rand() & 255));
-			drawContours(input, contours, i, colour);
+			drawContours(input, contours, i,  colour,7,8,noArray(),2,Point(0,0));
 		}
 		if (area > largest_area)
 		{
@@ -136,42 +152,22 @@ void DetectContours(Mat input) {
 		}
 	}
 
-	drawContours(input, contours, largest_contour_index, Scalar(0, 255, 0), 2); // Draw the largest contour using previously stored index.
+	//drawContours(input, contours, largest_contour_index, Scalar(0, 255, 0), 2); // Draw the largest contour using previously stored index.
+	if (convexFlag == 1) {
+		vector<Point> ConvexHullPoints = contoursConvexHull(contours);
+		polylines(input, ConvexHullPoints, true, Scalar(0, 0, 255), 7);
+	}
 	rectangle(input, bounding_rect, Scalar(255, 0, 0), 5, 8, 0);
-
-	// Now use bounding Rect and get ROI area
-	cv::Rect roi(bounding_rect.x + 20, bounding_rect.y + 20, bounding_rect.width - 40, bounding_rect.height - 40);
-	Mat input_roi = input(roi);
 	
-	Mat input_roi_gray;
-	cvtColor(input_roi, input_roi_gray, COLOR_BGR2GRAY);
-	blur(input_roi_gray, input_roi_gray,  Size(3, 3));
-	Canny(input_roi_gray, input_roi_gray, 10, 30, 3, false);
-
+	if (roiFlag == 1) {
+		cv::Rect roi(bounding_rect.x + 110, bounding_rect.y + 110, bounding_rect.width - 220, bounding_rect.height - 220);
+		return roi;
+	}
+	else {
+		cv::Rect roi(bounding_rect.x, bounding_rect.y, bounding_rect.width, bounding_rect.height);
+		return roi;
+	}
 	
-
-	Mat hsvImg; Mat thresholdImg;
-	cvtColor(input_roi, hsvImg, COLOR_BGR2HSV);
-	vector<Mat> channels;
-	split(hsvImg, channels);
-
-	// get the average hue value of the image
-	Scalar threshValue = mean(channels[0]);
-	double thresholdVal = threshValue[0];
-
-	threshold(channels[0], thresholdImg, thresholdVal, 179.0, THRESH_BINARY_INV);
-
-	blur(thresholdImg, thresholdImg, Size(5, 5));
-
-	dilate(thresholdImg, thresholdImg, Mat(), Point(-1, -1),1);
-	erode(thresholdImg, thresholdImg, Mat(), Point(-1, -1), 3);
-
-	threshold(thresholdImg, thresholdImg, thresholdVal, 179.0, THRESH_BINARY);
-	
-	Mat foreground = input_roi.clone();
-	foreground.setTo(Scalar(255, 255, 255));
-	input_roi.copyTo(foreground, thresholdImg);
-	imshow("copy", foreground);
 }
 
 void Mask(Mat input, Mat mask) {
@@ -179,4 +175,65 @@ void Mask(Mat input, Mat mask) {
 	dst.setTo(Scalar(255, 255, 255));
 	input.copyTo(dst, mask);
 	imshow("copy", dst);
+}
+
+double median(cv::Mat channel)
+{
+	double m = (channel.rows*channel.cols) / 2;
+	int bin = 0;
+	double med = -1.0;
+
+	int histSize = 256;
+	float range[] = { 0, 256 };
+	const float* histRange = { range };
+	bool uniform = true;
+	bool accumulate = false;
+	cv::Mat hist;
+	cv::calcHist(&channel, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
+
+	for (int i = 0; i < histSize && med < 0.0; ++i)
+	{
+		bin += cvRound(hist.at< float >(i));
+		if (bin > m && med < 0.0)
+			med = i;
+	}
+
+	return med;
+}
+
+Mat detectCanny(Mat input) {
+
+	Mat input_gray;
+	cvtColor(input, input_gray, COLOR_BGR2GRAY);
+	Mat canny;
+
+	Mat mCanny_Gray, mThres_Gray, result;
+	double CannyAccThresh = threshold(input_gray, mThres_Gray, 0, 255, CV_THRESH_BINARY | CV_THRESH_OTSU);
+	double CannyThresh = 0.1 * CannyAccThresh;
+
+	int erosion_size = 1;
+	Mat element = getStructuringElement(cv::MORPH_CROSS,
+		cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+		cv::Point(erosion_size, erosion_size));
+
+	// Apply erosion or dilation on the image
+	
+
+	Canny(input_gray, canny, CannyThresh, CannyAccThresh);
+	//morphologyEx(canny, canny, CV_MOP_GRADIENT, element, Point(-1, -1), 1, 1);
+	dilate(canny, canny, element, Point(-1, -1), 30, 1);
+
+	imshow("canny", canny);
+	return canny;
+}
+
+vector<Point> contoursConvexHull(vector<vector<Point> > contours)
+{
+	vector<Point> result;
+	vector<Point> pts;
+	for (size_t i = 0; i< contours.size(); i++)
+		for (size_t j = 0; j< contours[i].size(); j++)
+			pts.push_back(contours[i][j]);
+	convexHull(pts, result);
+	return result;
 }
