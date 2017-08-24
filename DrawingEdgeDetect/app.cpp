@@ -1,12 +1,14 @@
 #include "opencv2/highgui/highgui.hpp"
 #include <opencv2/opencv.hpp>
 #include <opencv2/core.hpp>
+#include <opencv2/ml.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
 
 using namespace cv;
 using namespace std;
+void EMSegmentation(Mat image, int no_of_clusters = 2);
 void Mask(Mat input, Mat mask);
 void DetectSquares(Mat input);
 double median(cv::Mat channel);
@@ -18,8 +20,7 @@ Mat detectCanny(Mat input);
 Rect DetectContours(Mat input, int drawFlag, int convexFlag, int roiFlag);
 int main(int argc, const char** argv)
 {
-	Mat img = imread("nurie.JPG", CV_LOAD_IMAGE_UNCHANGED); //read the image data in the file "MyPic.JPG" and store it in 'img'
-	Mat mask = imread("nurie_mask.JPG", CV_LOAD_IMAGE_UNCHANGED);
+	Mat img = imread("nurie_crop.JPG", CV_LOAD_IMAGE_UNCHANGED); //read the image data in the file "MyPic.JPG" and store it in 'img'
 	if (img.empty()) //check whether the image is loaded or not
 	{
 		cout << "Error : Image cannot be loaded..!!" << endl;
@@ -28,27 +29,13 @@ int main(int argc, const char** argv)
 	}
 
 	namedWindow("MyWindow", CV_WINDOW_NORMAL); //create a window with the name "MyWindow"
-	namedWindow("thr", CV_WINDOW_NORMAL);
-	resizeWindow("thr", 612, 816);
-	namedWindow("canny", CV_WINDOW_NORMAL);
-	resizeWindow("canny", 612, 816);
 	namedWindow("copy", CV_WINDOW_NORMAL);
-	resizeWindow("copy", 612, 816);
 	Rect imgRoi = DetectContours(img, 1, 0, 1);
 	Mat zoomedImg = img(imgRoi);
 	//Mask(img, mask);
-	Mat cannyImg = detectCanny(zoomedImg);
-	Mat cannyThreechannel;
-	cvtColor(cannyImg, cannyThreechannel, CV_GRAY2BGR);
-	Rect anotherRoi = DetectContours(cannyThreechannel, 1, 1, 0);
-	Mat moreZoomImg = cannyThreechannel(anotherRoi);
-
-
-	resizeWindow("MyWindow", 612, 816);
-
+	EMSegmentation(img, 2);
 	imshow("MyWindow", img); //display the image which is stored in the 'img' in the "MyWindow" window
-	imshow("thr", mask);
-	imshow("copy", moreZoomImg);
+	imshow("copy", zoomedImg);
 	waitKey(0); //wait infinite time for a keypress
 
 	destroyWindow("MyWindow"); //destroy the window with the name, "MyWindow"
@@ -130,7 +117,6 @@ Rect DetectContours(Mat input, int drawFlag, int convexFlag, int roiFlag) {
 	cvtColor(input, thr, COLOR_BGR2GRAY); //Convert to gray
 	threshold(thr, thr, 100, 120, THRESH_BINARY); //Threshold the gray
 	threshold(thr, thr, 20, 255, CV_THRESH_BINARY_INV);
-	imshow("thr", thr);
 	vector<vector<Point> > contours; // Vector for storing contours
 	std::vector<cv::Vec4i> hierarchy;
 	findContours(thr, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE); // Find the contours in the image
@@ -174,7 +160,6 @@ void Mask(Mat input, Mat mask) {
 	Mat dst;
 	dst.setTo(Scalar(255, 255, 255));
 	input.copyTo(dst, mask);
-	imshow("copy", dst);
 }
 
 double median(cv::Mat channel)
@@ -222,8 +207,6 @@ Mat detectCanny(Mat input) {
 	Canny(input_gray, canny, CannyThresh, CannyAccThresh);
 	//morphologyEx(canny, canny, CV_MOP_GRADIENT, element, Point(-1, -1), 1, 1);
 	dilate(canny, canny, element, Point(-1, -1), 30, 1);
-
-	imshow("canny", canny);
 	return canny;
 }
 
@@ -236,4 +219,70 @@ vector<Point> contoursConvexHull(vector<vector<Point> > contours)
 			pts.push_back(contours[i][j]);
 	convexHull(pts, result);
 	return result;
+}
+
+/**
+* Create a sample vector out of RGB image
+*/
+Mat asSamplesVectors(Mat& img) {
+	//convert the input image to float
+	cv::Mat floatSource;
+	img.convertTo(floatSource, CV_32F);
+
+	//now convert the float image to column vector
+	cv::Mat samples(img.rows * img.cols, 3, CV_32FC1);
+	int idx = 0;
+	for (int y = 0; y < img.rows; y++) {
+		cv::Vec3f* row = floatSource.ptr<cv::Vec3f >(y);
+		for (int x = 0; x < img.cols; x++) {
+			samples.at<cv::Vec3f >(idx++, 0) = row[x];
+		}
+	}
+	return samples;
+}
+
+/**
+Perform segmentation (clustering) using EM algorithm
+**/
+void EMSegmentation(Mat image, int no_of_clusters) {
+	Mat samples = asSamplesVectors(image);
+
+	cout << "Starting EM training" << endl;
+	/*
+	Ptr<cv::ml::EM> em = cv::ml::EM::create();
+	em->setClustersNumber(no_of_clusters);
+	
+	Mat responses;
+	Ptr<cv::ml::TrainData> trainData = cv::ml::TrainData::create(samples,
+		cv::ml::ROW_SAMPLE, responses,
+		noArray(),
+		noArray(),
+		noArray(),
+		noArray()
+	);
+
+	em->train(trainData);
+	*/
+
+	cv::Ptr<cv::ml::EM> source_model = cv::ml::EM::create();
+	source_model->setClustersNumber(no_of_clusters);
+	cv::Mat logs;
+	cv::Mat labels;
+	cv::Mat probs;
+	if (source_model->trainEM(samples, logs, labels, probs))
+	{
+		std::cout << "true train em";
+		for (cv::MatIterator_<int> it(labels.begin<int>()); it != labels.end<int>(); it++)
+		{
+			std::cout << (*it) << std::endl; // int i = *it
+		}
+	}
+	else {
+		std::cout << "false train em" << std::endl;
+	}
+	for (;;) {
+		if (waitKey(5) > 0) break;
+	}
+	cout << "Finished training EM" << endl;
+
 }
