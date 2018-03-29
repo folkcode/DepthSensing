@@ -11,7 +11,10 @@ set( OpenCV_DIR "D:/Libraries/opencv3.4.0/build" )
 option( OpenCV_STATIC OFF )
 find_package(OpenCV REQUIRED)
 
-# URG sensor
+# OSCPACK
+set(OSCPACK_INCLUDE_DIR      "D:/Libraries/oscpack_1_1_0")
+
+# XTion2 SDK
 set(XTION_ROOT                 "D:/Applications/Xtion2/Installation32" )
 set(XTION_INCLUDE_DIRS         "D:/Applications/Xtion2/Installation32/Include")
 set(XTION_LIB_RELEASE_DIR      "D:/Applications/Xtion2/Installation32/Lib")
@@ -49,7 +52,7 @@ endif()
 
 
 # Declare the executable target built from your sources
-set(SOURCES  src/main.cpp)
+set(SOURCES  src/main.cpp ${OSCPACK_INCLUDE_DIR}/osc/OscTypes.cpp ${OSCPACK_INCLUDE_DIR}/osc/OscReceivedElements.cpp ${OSCPACK_INCLUDE_DIR}/osc/OscPrintReceivedElements.cpp ${OSCPACK_INCLUDE_DIR}/osc/OscOutboundPacketStream.cpp ${OSCPACK_INCLUDE_DIR}/ip/IpEndpointName.cpp ${OSCPACK_INCLUDE_DIR}/ip/win32/NetworkingUtils.cpp ${OSCPACK_INCLUDE_DIR}/ip/win32/UdpSocket.cpp)
 add_executable(depth_filtering ${SOURCES} ${ADDITIONAL_INCLUDE}/OniSampleUtilities.h)
 
 if(WIN32)
