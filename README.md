@@ -17,3 +17,8 @@ Base project to capture and display depth images.
 ## depth_filtering
 Filters objects farther than a threshold range. Objects closer than this range will be detected using OpenCV's blob detection.
 The result points are transmitted with OSC so other applications can use them.
+### Data Format
+When sending through OSC, the data format is as follows :
+x1, y1, x2, y2, ... , end
+
+You can check for the string "end" to determine end of data.
