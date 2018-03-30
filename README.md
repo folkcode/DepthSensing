@@ -11,7 +11,7 @@ This program is a collection of depth sensing projects using the Xtion2 depth ca
 * Binaries will be inside build/Release or build/Debug depending on build configurations.
 
 # Projects
-## depth_capture
+## depth_image
 Base project to capture and display depth images.
 
 ## depth_filtering
