@@ -9,6 +9,7 @@ This program is a collection of depth sensing projects using the Xtion2 depth ca
 # Building
 * Use the included CMakelists.txt with Cmake to build.
 * Binaries will be inside build/Release or build/Debug depending on build configurations.
+* The binaries will also depend on Rvclib.dll and SenDuck.dll which are located in  <Xtion2SDK Install folders>/Samples/bin/OpenNI2/Drivers
 
 # Projects
 ## depth_image
